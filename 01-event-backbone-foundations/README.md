@@ -67,30 +67,30 @@ in code at least once.
 
 1. **Topic bootstrap.** A small command that creates `marketplace.listings.v1` with the shape
    above, is safe to run twice (handle "topic already exists" gracefully), and prints back the
-   topic description it read from the broker.
+   topic description it read from the broker. ✅
 
 2. **Produce with a meaningful key.** The event key must be the listing ID. The value may be
-   JSON for now — schemas arrive in project 04.
+   JSON for now — schemas arrive in project 04. ✅
 
 3. **Event envelope.** Every event carries, in *headers* (not the payload): event type
    (`listing.created` / `listing.updated` / `listing.deleted`), a schema/version marker, a
    correlation ID, and the producing service name. Keeping metadata in headers so a consumer
-   can route without deserializing the body is a habit worth forming now.
+   can route without deserializing the body is a habit worth forming now. ✅
 
 4. **Synchronous produce path.** The HTTP handler must not return `201` until the broker has
    acknowledged the record. Return the assigned partition and offset in the response body —
-   you will use these to reason about ordering.
+   you will use these to reason about ordering. ✅
 
 5. **Asynchronous produce path.** Add a second endpoint that produces without waiting, with a
-   callback that logs the result. Compare the latency of both endpoints under a load generator.
+   callback that logs the result. Compare the latency of both endpoints under a load generator. ✅
 
 6. **Consumer group.** `listing-indexer` joins group `listing-indexer-v1`, applies events to its
    index, and commits offsets **manually** after applying. Auto-commit is forbidden in this
-   project; you need to feel the difference before you are allowed to use the convenience.
+   project; you need to feel the difference before you are allowed to use the convenience. ✅
 
 7. **Graceful shutdown.** On `SIGTERM` the consumer must stop fetching, finish in-flight
    records, commit, and leave the group cleanly. Note how much faster rebalancing is when a
-   member leaves properly versus when you `kill -9` it.
+   member leaves properly versus when you `kill -9` it. ✅
 
 8. **Lag reporting.** A command that, for a given group, prints per-partition: current offset,
    log end offset, and lag. Do not shell out to `kafka-consumer-groups.sh` — read it from the
