@@ -67,6 +67,10 @@ func run(ctx context.Context) error {
 		fmt.Println("Polling fetches")
 		fetches := kafkaClient.PollFetches(ctx)
 		if errs := fetches.Errors(); len(errs) > 0 {
+			if errors.Is(errs[0].Err, context.Canceled) {
+				break
+			}
+
 			err = fmt.Errorf("error consuming messages from kafka: %v", errs)
 			break
 		}
@@ -93,7 +97,7 @@ func run(ctx context.Context) error {
 	if exitErr != nil {
 		return errors.Join(exitErr, err)
 	}
-	fmt.Println("Left group consumer gracefully")
+	fmt.Printf("\nLeft group consumer gracefully\n")
 
 	if err != nil {
 		return err
