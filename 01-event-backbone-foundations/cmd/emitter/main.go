@@ -47,17 +47,26 @@ type handlers struct {
 	kafkaClient *kgo.Client
 }
 
+type CreateListingRequest struct {
+	ListingID string `json:"listing_id"`
+}
+
 type CreateListingResponse struct {
 	Partition int32 `json:"partition"`
 	Offset    int64 `json:"offset"`
 }
 
 func (h *handlers) createListing(c *echo.Context) error {
-	listingID := ulid.Make().String()
-	msg := fmt.Sprintf(`{ "id": "%s" }`, listingID)
+	var body CreateListingRequest
+	err := c.Bind(&body)
+	if err != nil {
+		return err
+	}
+
+	msg := fmt.Sprintf(`{ "id": "%s", "event_id": "%s" }`, body.ListingID, ulid.Make().String())
 
 	record := kgo.Record{
-		Key:       []byte(listingID),
+		Key:       []byte(body.ListingID),
 		Value:     []byte(msg),
 		Timestamp: time.Now(),
 		Topic:     common.MarketplaceListingV1Topic,

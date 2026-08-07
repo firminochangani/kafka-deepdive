@@ -103,32 +103,54 @@ in code at least once.
 Write your observations down in a `NOTES.md` inside this folder. The notes are the actual
 deliverable of this project; the code is just the instrument.
 
-1. **Key → partition.** Produce 1000 events across 50 listing IDs. Confirm every event for a
-   given ID lands on the same partition. Now produce with a `nil` key and observe how records
-   are distributed instead.
+Challenge: Key → partition.** Produce 1000 events across 50 listing IDs. Confirm every event for a 
+given ID lands on the same partition. Now produce with a `nil` key and observe how records 
+are distributed instead.: 
 
-2. **Ordering is per-partition, not per-topic.** Produce `created` → `updated` → `deleted` for
-   the same listing, then interleave with other listings. Confirm the ordering guarantee holds
-   inside a partition and does *not* hold across the topic.
+```
+All records do land on the same partition
+``` 
 
-3. **Partition count vs consumers.** Run 1, then 3, then 6, then 8 instances of the indexer in
-   the same group. Record the assignment at each step. Explain what the 8th instance is doing.
+Challenge: Ordering is per-partition, not per-topic.** Produce `created` → `updated` → `deleted` for 
+the same listing, then interleave with other listings. Confirm the ordering guarantee holds 
+inside a partition and does *not* hold across the topic.
 
-4. **Two groups, one topic.** Start a second consumer group on the same topic. Confirm both
-   groups receive every event and that their offsets are independent. This is the single most
-   important property of Kafka versus a traditional queue — make sure you can articulate why.
+Challenge: Partition count vs consumers.** Run 1, then 3, then 6, then 8 instances of the indexer in
+the same group. Record the assignment at each step. Explain what the 8th instance is doing.
 
-5. **Replay.** Reset `listing-indexer-v1` to the beginning and let it rebuild its index from
-   scratch. Then reset to a specific timestamp. Then reset to a specific offset on one
-   partition only.
+```
+The 7th and 8th instance don't get messages
+```
 
-6. **The offset lie.** Consume a batch, apply it, crash before committing (`panic` deliberately).
-   Restart. Observe the redelivery. Then do the reverse: commit *before* applying, crash, and
-   observe the loss. You have now built at-least-once and at-most-once by accident — name which
-   is which and be able to say which one production systems almost always pick.
+Challenge: Two groups, one topic.** Start a second consumer group on the same topic. Confirm both 
+groups receive every event and that their offsets are independent. This is the single most important
+property of Kafka versus a traditional queue — make sure you can articulate why.
 
-7. **Consumer group states.** Watch a group move through `PreparingRebalance` → `CompletingRebalance`
-   → `Stable` while you add and remove members.
+```
+Each consumer group consuming messages from the same topic has an independent offset keeping track of the position to
+read the next message from.
+
+A traditional message broker such as RabbitMQ will have separate queues for consumer on the same topic.
+```
+
+Challenge: Replay.** Reset `listing-indexer-v1` to the beginning and let it rebuild its index from 
+scratch. Then reset to a specific timestamp. Then reset to a specific offset on one 
+partition only.
+
+Challenge: The offset lie.** Consume a batch, apply it, crash before committing (`panic` deliberately). 
+Restart. Observe the redelivery. Then do the reverse: commit *before* applying, crash, and 
+observe the loss. You have now built at-least-once and at-most-once by accident — name which 
+is which and be able to say which one production systems almost always pick.
+
+```
+Crashing before committing: messages will be redelivered to the consumer once it comes back up again.
+```
+
+```
+Committing before applying and then crashing: that message will be lost, until the group a replay occurs via offset reset.
+```
+
+Challenge: Consumer group states.** Watch a group move through `PreparingRebalance` → `CompletingRebalance` → `Stable` while you add and remove members.
 
 ---
 

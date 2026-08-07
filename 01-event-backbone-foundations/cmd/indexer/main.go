@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -41,10 +42,14 @@ func run(ctx context.Context) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer cancel()
 
+	consumerGroup := cmp.Or(os.Getenv("CONSUMER_GROUP"), common.ListingIndexerV2ConsumerGroup)
+
+	fmt.Printf("Starting indexer bound to consumer group '%s'", consumerGroup)
+
 	kafkaClient, err := kgo.NewClient(
 		kgo.SeedBrokers([]string{"localhost:9092"}...),
 		kgo.ConsumeTopics(common.MarketplaceListingV1Topic),
-		kgo.ConsumerGroup(common.ListingIndexerV2ConsumerGroup),
+		kgo.ConsumerGroup(consumerGroup),
 		kgo.DisableAutoCommit(),
 	)
 	if err != nil {
@@ -80,8 +85,10 @@ func run(ctx context.Context) error {
 		for !iter.Done() {
 			record := iter.Next()
 			indexer.ApplyEvent(record)
-			fmt.Printf("New event applied to the indexer: %s\n", string(record.Value))
+			fmt.Printf("New event applied to the indexer. partition: '%d' event: %s\n", record.Partition, string(record.Value))
 		}
+
+		// panic("oops")
 
 		err = kafkaClient.CommitUncommittedOffsets(ctx)
 		if err != nil {
