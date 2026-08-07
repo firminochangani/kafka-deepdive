@@ -9,10 +9,7 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
-// 8. **Lag reporting.** A command that, for a given group, prints per-partition: current offset,
-// log end offset, and lag. Do not shell out to `kafka-consumer-groups.sh` — read it from the
-// Admin API.
-
+// CLI: ./opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group listing-indexer-v1
 func main() {
 	err := run()
 	if err != nil {
@@ -32,7 +29,23 @@ func run() error {
 	kafkaAdminClient := kadm.NewClient(kafkaClient)
 
 	ctx := context.Background()
-	kafkaAdminClient.DescribeConsumerGroups()
+	resp, err := kafkaAdminClient.FetchOffsets(ctx, common.ListingIndexerV2ConsumerGroup)
+	if err != nil {
+		return err
+	}
+
+	resp.Each(func(o kadm.OffsetResponse) {
+		fmt.Println(o.Partition, o.At)
+	})
+
+	lagResp, err := kafkaAdminClient.Lag(ctx, common.ListingIndexerV2ConsumerGroup)
+	if err != nil {
+		return err
+	}
+	lagResp.Each(func(l kadm.DescribedGroupLag) {
+		fmt.Println("#")
+		fmt.Println(l.Lag)
+	})
 
 	return nil
 }

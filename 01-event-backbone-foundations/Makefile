@@ -9,3 +9,6 @@ emitter:
 
 indexer:
 	reflex -s -r '\.go$$' go run cmd/indexer/main.go
+
+lag:
+	go run cmd/lag/main.go

@@ -94,7 +94,7 @@ in code at least once.
 
 8. **Lag reporting.** A command that, for a given group, prints per-partition: current offset,
    log end offset, and lag. Do not shell out to `kafka-consumer-groups.sh` — read it from the
-   Admin API.
+   Admin API. ⚠️ (TODO)
 
 ---
 
