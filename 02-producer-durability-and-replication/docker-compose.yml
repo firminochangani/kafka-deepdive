@@ -1,0 +1,129 @@
+# 3 brokers + 1 dedicated KRaft controller.
+#
+# Why a dedicated controller instead of 3 combined nodes:
+#   Experiment 4 ("make the topic unwritable") requires stopping 2 of 3 brokers.
+#   With 3 combined nodes that also kills 2 of 3 controllers, so the Raft quorum is
+#   lost and the whole cluster dies -- you would be observing a metadata outage, not
+#   NOT_ENOUGH_REPLICAS. Splitting the roles keeps the control plane alive so the
+#   data-plane failure is the only variable.
+#   Trade-off: a single controller is a SPOF and is not what you would run in
+#   production (there you want 3 or 5 controllers). Here it is a measuring rig.
+
+x-broker-common: &broker-common
+  image: apache/kafka:latest
+  # The image runs as appuser(1000), but Docker creates named-volume mountpoints
+  # owned by root. Running as root is the least-friction fix for a local rig.
+  user: root
+  environment: &broker-env
+    CLUSTER_ID: "kafka-deepdive-02-abcdefghij"
+
+    KAFKA_PROCESS_ROLES: broker
+    KAFKA_CONTROLLER_QUORUM_VOTERS: "0@controller:9093"
+    KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+    KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT"
+    KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+    KAFKA_LOG_DIRS: /opt/kafka/data
+
+    # Cluster requirements from the README.
+    KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "3"
+    KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "3"
+    KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "2"
+    KAFKA_DEFAULT_REPLICATION_FACTOR: "3"
+    KAFKA_MIN_INSYNC_REPLICAS: "2"
+    KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: "false"
+
+    # Off on purpose: an accidental auto-created topic would come up with the
+    # broker defaults and silently contaminate an experiment.
+    KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    KAFKA_NUM_PARTITIONS: "3"
+    KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+
+    # Default is 30000. Lower it if you get bored waiting for the ISR to shrink
+    # during failure experiments -- but record which value produced your numbers.
+    KAFKA_REPLICA_LAG_TIME_MAX_MS: "30000"
+  healthcheck:
+    test: ["CMD", "/opt/kafka/bin/kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:19092"]
+    interval: 10s
+    timeout: 10s
+    retries: 12
+    start_period: 20s
+  depends_on:
+    controller:
+      condition: service_started
+
+services:
+  controller:
+    image: apache/kafka:latest
+    container_name: controller
+    user: root
+    environment:
+      CLUSTER_ID: "kafka-deepdive-02-abcdefghij"
+      KAFKA_NODE_ID: "0"
+      KAFKA_PROCESS_ROLES: controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "0@controller:9093"
+      KAFKA_LISTENERS: "CONTROLLER://:9093"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT"
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LOG_DIRS: /opt/kafka/data
+    volumes:
+      - controller-data:/opt/kafka/data
+
+  broker1:
+    <<: *broker-common
+    container_name: broker1
+    environment:
+      <<: *broker-env
+      KAFKA_NODE_ID: "1"
+      KAFKA_LISTENERS: "INTERNAL://:19092,EXTERNAL://:9092"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://broker1:19092,EXTERNAL://localhost:9092"
+    ports:
+      - "9092:9092"
+    volumes:
+      - broker1-data:/opt/kafka/data
+
+  broker2:
+    <<: *broker-common
+    container_name: broker2
+    environment:
+      <<: *broker-env
+      KAFKA_NODE_ID: "2"
+      KAFKA_LISTENERS: "INTERNAL://:19092,EXTERNAL://:9092"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://broker2:19092,EXTERNAL://localhost:9093"
+    ports:
+      - "9093:9092"
+    volumes:
+      - broker2-data:/opt/kafka/data
+
+  broker3:
+    <<: *broker-common
+    container_name: broker3
+    environment:
+      <<: *broker-env
+      KAFKA_NODE_ID: "3"
+      KAFKA_LISTENERS: "INTERNAL://:19092,EXTERNAL://:9092"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://broker3:19092,EXTERNAL://localhost:9094"
+    ports:
+      - "9094:9092"
+    volumes:
+      - broker3-data:/opt/kafka/data
+
+  dashboard:
+    image: redpandadata/console:latest
+    container_name: dashboard
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_BROKERS: "broker1:19092,broker2:19092,broker3:19092"
+    depends_on:
+      broker1:
+        condition: service_healthy
+      broker2:
+        condition: service_healthy
+      broker3:
+        condition: service_healthy
+
+volumes:
+  controller-data:
+  broker1-data:
+  broker2-data:
+  broker3-data:
